@@ -8,5 +8,5 @@
     <label>Senha</label><%= form.password_field :password, required: true, autocomplete: "current-password", placeholder: "Sua senha", maxlength: 72 %>
     <%= form.submit "Entrar", class: "button primary" %>
   <% end %>
-  <%= link_to "Esqueci minha senha", new_password_path, class: "auth-link" %>
+  <p class="muted auth-help">Esqueceu a senha? Solicite a redefinição a um administrador.</p>
 </section>

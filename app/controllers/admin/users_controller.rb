@@ -1,5 +1,5 @@
 class Admin::UsersController < Admin::BaseController
-  before_action :set_user, only: %i[update]
+  before_action :set_user, only: %i[edit update]
 
   def index
     @users = User.order(:name)
@@ -9,12 +9,14 @@ class Admin::UsersController < Admin::BaseController
     @user = User.new(role: :member, active: true)
   end
 
+  def edit
+  end
+
   def create
-    @user = User.new(user_params.merge(password: SecureRandom.base58(32), invited_at: Time.current))
+    @user = User.new(user_params)
     if @user.save
-      PasswordsMailer.reset(@user).deliver_later
-      record_activity("user.invited", @user)
-      redirect_to admin_users_path, notice: "Convite enviado para #{@user.email_address}."
+      record_activity("user.created", @user)
+      redirect_to admin_users_path, notice: "Usuário criado. Compartilhe a senha inicial de forma segura."
     else
       render :new, status: :unprocessable_entity
     end
@@ -23,11 +25,11 @@ class Admin::UsersController < Admin::BaseController
   def update
     if @user == current_user && params.dig(:user, :active) == "0"
       redirect_to admin_users_path, alert: "Você não pode desativar a própria conta."
-    elsif @user.update(user_params.slice(:role, :active))
+    elsif @user.update(update_params)
       record_activity("user.updated", @user)
       redirect_to admin_users_path, notice: "Usuário atualizado."
     else
-      redirect_to admin_users_path, alert: @user.errors.full_messages.to_sentence
+      render :edit, status: :unprocessable_entity
     end
   end
 
@@ -37,6 +39,15 @@ class Admin::UsersController < Admin::BaseController
     end
 
     def user_params
-      params.require(:user).permit(:name, :email_address, :role, :active)
+      params.require(:user).permit(:name, :email_address, :role, :active, :password, :password_confirmation)
+    end
+
+    def update_params
+      user_params.tap do |attributes|
+        if attributes[:password].blank?
+          attributes.delete(:password)
+          attributes.delete(:password_confirmation)
+        end
+      end
     end
 end

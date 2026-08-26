@@ -1,14 +1,13 @@
 Rails.application.routes.draw do
   resource :session
   root "dashboard#index"
-  resources :passwords, param: :token
   resources :screenshots, only: %i[index show]
 
   namespace :admin do
     resources :newspapers do
       post :capture, on: :member
     end
-    resources :users, only: %i[index new create update]
+    resources :users, only: %i[index new create edit update]
   end
   # Define your application routes per the DSL in https://guides.rubyonrails.org/routing.html
 

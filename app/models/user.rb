@@ -9,6 +9,7 @@ class User < ApplicationRecord
 
   validates :name, presence: true
   validates :email_address, presence: true, uniqueness: { case_sensitive: false }
+  validates :password, length: { minimum: 8 }, allow_nil: true
 
   scope :active, -> { where(active: true) }
 end

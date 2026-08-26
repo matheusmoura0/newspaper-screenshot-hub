@@ -1,0 +1,31 @@
+<%= form_with model: [:admin, user], class: "panel stack-form narrow-panel" do |form| %>
+  <% if user.errors.any? %>
+    <div class="form-errors"><%= user.errors.full_messages.to_sentence %></div>
+  <% end %>
+
+  <%= form.label :name, "Nome" %>
+  <%= form.text_field :name, required: true %>
+
+  <%= form.label :email_address, "E-mail" %>
+  <%= form.email_field :email_address, required: true %>
+
+  <%= form.label :role, "Perfil" %>
+  <%= form.select :role, [["Membro", "member"], ["Administrador", "admin"]] %>
+
+  <%= form.label :password, user.persisted? ? "Nova senha (opcional)" : "Senha inicial" %>
+  <%= form.password_field :password, required: user.new_record?, minlength: 8, maxlength: 72, autocomplete: "new-password" %>
+
+  <%= form.label :password_confirmation, "Confirmar senha" %>
+  <%= form.password_field :password_confirmation, required: user.new_record?, minlength: 8, maxlength: 72, autocomplete: "new-password" %>
+
+  <% if user.persisted? %>
+    <label class="check"><%= form.check_box :active %> Usuário ativo</label>
+  <% else %>
+    <%= form.hidden_field :active, value: true %>
+  <% end %>
+
+  <div class="form-actions">
+    <%= link_to "Cancelar", admin_users_path, class: "button secondary" %>
+    <%= form.submit user.persisted? ? "Salvar alterações" : "Criar usuário", class: "button primary" %>
+  </div>
+<% end %>
