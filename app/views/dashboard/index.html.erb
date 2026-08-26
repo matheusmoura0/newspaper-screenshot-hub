@@ -1,2 +1,17 @@
-<h1>Dashboard#index</h1>
-<p>Find me in app/views/dashboard/index.html.erb</p>
+<div class="page-heading">
+  <div><p class="eyebrow">VISÃO GERAL</p><h1>Olá, <%= current_user.name.split.first %>.</h1><p class="muted">Acompanhe o acervo e a operação das capturas.</p></div>
+  <%= link_to "Abrir acervo", screenshots_path, class: "button primary" %>
+</div>
+<section class="stats-grid">
+  <article class="stat"><span>Jornais ativos</span><strong><%= @active_newspapers %></strong></article>
+  <article class="stat"><span>Capturas esperadas</span><strong><%= @capture_run&.expected_count || 0 %></strong></article>
+  <article class="stat success"><span>Concluídas hoje</span><strong><%= @capture_run&.completed_count || 0 %></strong></article>
+  <article class="stat danger"><span>Falhas hoje</span><strong><%= @capture_run&.failed_count || 0 %></strong></article>
+</section>
+<section class="section-block">
+  <div class="section-heading"><div><p class="eyebrow">MAIS RECENTES</p><h2>Últimas capturas</h2></div><%= link_to "Ver todas", screenshots_path %></div>
+  <div class="gallery-grid">
+    <% @recent_screenshots.each do |screenshot| %><%= link_to screenshot_path(screenshot), class: "capture-card" do %><div class="capture-image"><%= image_tag screenshot.image.variant(resize_to_limit: [640, 800]) if screenshot.image.attached? %></div><div class="capture-meta"><strong><%= screenshot.newspaper.name %></strong><span><%= l screenshot.captured_on %> · <%= screenshot.viewport.capitalize %></span></div><% end %><% end %>
+    <% if @recent_screenshots.empty? %><div class="empty-state"><strong>Nenhuma captura disponível</strong><p>As primeiras imagens aparecerão após a execução do bot.</p></div><% end %>
+  </div>
+</section>

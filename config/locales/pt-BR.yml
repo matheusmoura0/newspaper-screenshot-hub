@@ -1,0 +1,29 @@
+pt-BR:
+  date:
+    formats:
+      default: "%d/%m/%Y"
+      short: "%d/%m"
+      long: "%d de %B de %Y"
+    month_names: [~, janeiro, fevereiro, março, abril, maio, junho, julho, agosto, setembro, outubro, novembro, dezembro]
+  time:
+    formats:
+      default: "%d/%m/%Y, %H:%M"
+      short: "%d/%m/%Y, %H:%M"
+  activerecord:
+    models:
+      newspaper: Jornal
+      user: Usuário
+    attributes:
+      newspaper:
+        name: Nome
+        homepage_url: URL
+        time_zone: Fuso horário
+        capture_time: Horário de captura
+      user:
+        name: Nome
+        email_address: E-mail
+  errors:
+    messages:
+      blank: não pode ficar em branco
+      taken: já está em uso
+      invalid: não é válido

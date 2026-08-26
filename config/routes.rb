@@ -1,8 +1,13 @@
 Rails.application.routes.draw do
-  get "dashboard/index"
   resource :session
   root "dashboard#index"
   resources :passwords, param: :token
+  resources :screenshots, only: %i[index show]
+
+  namespace :admin do
+    resources :newspapers
+    resources :users, only: %i[index new create update]
+  end
   # Define your application routes per the DSL in https://guides.rubyonrails.org/routing.html
 
   # Reveal health status on /up that returns 200 if the app boots with no exceptions, otherwise 500.

@@ -24,6 +24,28 @@
   </head>
 
   <body>
-    <%= yield %>
+    <% if authenticated? %>
+      <header class="app-header">
+        <%= link_to root_path, class: "brand" do %>
+          <span class="brand-mark">NS</span>
+          <span><strong>Newspaper</strong><small>Screenshot Hub</small></span>
+        <% end %>
+        <nav>
+          <%= link_to "Acervo", screenshots_path %>
+          <% if current_user&.admin? %>
+            <%= link_to "Jornais", admin_newspapers_path %>
+            <%= link_to "Usuários", admin_users_path %>
+          <% end %>
+          <%= button_to "Sair", session_path, method: :delete, class: "link-button" %>
+        </nav>
+      </header>
+    <% end %>
+
+    <main class="page-shell <%= "auth-shell" unless authenticated? %>">
+      <% flash.each do |type, message| %>
+        <div class="flash <%= type %>"><%= message %></div>
+      <% end %>
+      <%= yield %>
+    </main>
   </body>
 </html>

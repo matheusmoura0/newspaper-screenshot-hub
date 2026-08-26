@@ -6,16 +6,17 @@ class SessionsController < ApplicationController
   end
 
   def create
-    if user = User.authenticate_by(params.permit(:email_address, :password))
+    if (user = User.authenticate_by(params.permit(:email_address, :password))) && user.active?
       start_new_session_for user
+      user.update_column(:last_sign_in_at, Time.current)
       redirect_to after_authentication_url
     else
-      redirect_to new_session_path, alert: "Try another email address or password."
+      redirect_to new_session_path, alert: "E-mail ou senha inválidos."
     end
   end
 
   def destroy
     terminate_session
-    redirect_to new_session_path, status: :see_other
+    redirect_to new_session_path, notice: "Sessão encerrada.", status: :see_other
   end
 end

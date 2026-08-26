@@ -1,0 +1,4 @@
+<div class="page-heading"><div><p class="eyebrow">ADMINISTRAÇÃO</p><h1>Jornais</h1><p class="muted">Gerencie as páginas monitoradas e seus formatos de captura.</p></div><%= link_to "Adicionar jornal", new_admin_newspaper_path, class: "button primary" %></div>
+<div class="table-card"><table><thead><tr><th>Jornal</th><th>Horário</th><th>Formatos</th><th>Status</th><th></th></tr></thead><tbody>
+<% @newspapers.each do |newspaper| %><tr><td><strong><%= newspaper.name %></strong><small><%= newspaper.homepage_url %></small></td><td><%= newspaper.capture_time.strftime("%H:%M") %></td><td><%= [newspaper.desktop_enabled? && "Desktop", newspaper.mobile_enabled? && "Mobile"].compact.join(" + ") %></td><td><span class="status <%= newspaper.active? ? "ok" : "off" %>"><%= newspaper.active? ? "Ativo" : "Pausado" %></span></td><td><%= link_to "Gerenciar", admin_newspaper_path(newspaper) %></td></tr><% end %>
+</tbody></table></div>

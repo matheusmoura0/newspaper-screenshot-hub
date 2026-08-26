@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_08_26_200714) do
+ActiveRecord::Schema[8.1].define(version: 2026_08_26_210000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -47,43 +47,47 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_26_200714) do
     t.bigint "auditable_id"
     t.string "auditable_type"
     t.datetime "created_at", null: false
-    t.jsonb "metadata"
+    t.jsonb "metadata", default: {}
     t.datetime "updated_at", null: false
     t.bigint "user_id", null: false
+    t.index ["auditable_type", "auditable_id"], name: "index_activity_logs_on_auditable_type_and_auditable_id"
     t.index ["user_id"], name: "index_activity_logs_on_user_id"
   end
 
   create_table "capture_runs", force: :cascade do |t|
-    t.integer "completed_count"
+    t.integer "completed_count", default: 0
     t.datetime "created_at", null: false
     t.text "error_summary"
-    t.integer "expected_count"
-    t.integer "failed_count"
+    t.integer "expected_count", default: 0
+    t.integer "failed_count", default: 0
     t.datetime "finished_at"
     t.date "scheduled_for"
     t.datetime "started_at"
-    t.integer "status"
+    t.integer "status", default: 0
     t.datetime "updated_at", null: false
+    t.index ["scheduled_for"], name: "index_capture_runs_on_scheduled_for", unique: true
   end
 
   create_table "newspapers", force: :cascade do |t|
-    t.boolean "active"
-    t.jsonb "capture_options"
+    t.boolean "active", default: true
+    t.jsonb "capture_options", default: {}
     t.time "capture_time"
     t.string "category"
-    t.string "country"
+    t.string "country", default: "Brasil"
     t.datetime "created_at", null: false
-    t.boolean "desktop_enabled"
+    t.boolean "desktop_enabled", default: true
     t.string "homepage_url"
-    t.boolean "mobile_enabled"
+    t.boolean "mobile_enabled", default: true
     t.string "name"
     t.string "slug"
-    t.string "time_zone"
+    t.string "time_zone", default: "America/Sao_Paulo"
     t.datetime "updated_at", null: false
+    t.index ["active"], name: "index_newspapers_on_active"
+    t.index ["slug"], name: "index_newspapers_on_slug", unique: true
   end
 
   create_table "screenshots", force: :cascade do |t|
-    t.integer "attempts"
+    t.integer "attempts", default: 0
     t.bigint "capture_run_id", null: false
     t.datetime "captured_at"
     t.date "captured_on"
@@ -92,14 +96,16 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_26_200714) do
     t.string "error_code"
     t.text "error_message"
     t.integer "height"
-    t.jsonb "metadata"
+    t.jsonb "metadata", default: {}
     t.bigint "newspaper_id", null: false
     t.string "source_url"
-    t.integer "status"
+    t.integer "status", default: 0
     t.datetime "updated_at", null: false
     t.integer "viewport"
     t.integer "width"
     t.index ["capture_run_id"], name: "index_screenshots_on_capture_run_id"
+    t.index ["captured_on", "status"], name: "index_screenshots_on_captured_on_and_status"
+    t.index ["newspaper_id", "captured_on", "viewport"], name: "idx_screenshots_daily_viewport", unique: true
     t.index ["newspaper_id"], name: "index_screenshots_on_newspaper_id"
   end
 
@@ -114,14 +120,14 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_26_200714) do
 
   create_table "users", force: :cascade do |t|
     t.datetime "accepted_invitation_at"
-    t.boolean "active"
+    t.boolean "active", default: true
     t.datetime "created_at", null: false
     t.string "email_address", null: false
     t.datetime "invited_at"
     t.datetime "last_sign_in_at"
     t.string "name"
     t.string "password_digest", null: false
-    t.integer "role"
+    t.integer "role", default: 0
     t.datetime "updated_at", null: false
     t.index ["email_address"], name: "index_users_on_email_address", unique: true
   end

@@ -1,11 +1,12 @@
-<%= tag.div(flash[:alert], style: "color:red") if flash[:alert] %>
-<%= tag.div(flash[:notice], style: "color:green") if flash[:notice] %>
-
-<%= form_with url: session_path do |form| %>
-  <%= form.email_field :email_address, required: true, autofocus: true, autocomplete: "username", placeholder: "Enter your email address", value: params[:email_address] %><br>
-  <%= form.password_field :password, required: true, autocomplete: "current-password", placeholder: "Enter your password", maxlength: 72 %><br>
-  <%= form.submit "Sign in" %>
-<% end %>
-<br>
-
-<%= link_to "Forgot password?", new_password_path %>
+<section class="auth-card">
+  <div class="brand auth-brand"><span class="brand-mark">NS</span><span><strong>Newspaper</strong><small>Screenshot Hub</small></span></div>
+  <p class="eyebrow">ACESSO RESTRITO</p>
+  <h1>Entre no acervo</h1>
+  <p class="muted">Consulte diariamente as páginas capturadas dos jornais monitorados.</p>
+  <%= form_with url: session_path, class: "stack-form" do |form| %>
+    <label>E-mail</label><%= form.email_field :email_address, required: true, autofocus: true, autocomplete: "username", placeholder: "voce@empresa.com.br", value: params[:email_address] %>
+    <label>Senha</label><%= form.password_field :password, required: true, autocomplete: "current-password", placeholder: "Sua senha", maxlength: 72 %>
+    <%= form.submit "Entrar", class: "button primary" %>
+  <% end %>
+  <%= link_to "Esqueci minha senha", new_password_path, class: "auth-link" %>
+</section>
