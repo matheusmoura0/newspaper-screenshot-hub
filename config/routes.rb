@@ -5,7 +5,9 @@ Rails.application.routes.draw do
   resources :screenshots, only: %i[index show]
 
   namespace :admin do
-    resources :newspapers
+    resources :newspapers do
+      post :capture, on: :member
+    end
     resources :users, only: %i[index new create update]
   end
   # Define your application routes per the DSL in https://guides.rubyonrails.org/routing.html

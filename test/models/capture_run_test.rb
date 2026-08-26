@@ -1,7 +1,7 @@
 require "test_helper"
 
 class CaptureRunTest < ActiveSupport::TestCase
-  # test "the truth" do
-  #   assert true
-  # end
+  test "defaults to pending" do
+    assert CaptureRun.new.pending?
+  end
 end

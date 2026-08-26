@@ -11,4 +11,8 @@ class Screenshot < ApplicationRecord
   validates :viewport, uniqueness: { scope: %i[newspaper_id captured_on] }
 
   scope :recent, -> { order(captured_on: :desc, captured_at: :desc) }
+
+  def mark_failed!(error)
+    update!(status: :failed, error_code: error.class.name, error_message: error.message.to_s.truncate(2_000))
+  end
 end

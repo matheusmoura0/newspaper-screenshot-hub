@@ -21,4 +21,46 @@ Plataforma interna para capturar, organizar e consultar screenshots diários de 
 - Playwright/Chromium
 - Render
 
-O projeto está em desenvolvimento. A branch `main` será mantida estável e o trabalho será realizado pela branch `develop`.
+## Desenvolvimento local
+
+Pré-requisitos: Ruby 3.3, PostgreSQL, Python 3 e Chromium do Playwright.
+
+```bash
+cp .env.example .env
+bundle install
+pip3 install -r requirements.txt
+python3 -m playwright install chromium
+bin/rails db:prepare db:seed
+bin/dev
+```
+
+## Capturas
+
+Executar todos os jornais ativos:
+
+```bash
+bin/rails captures:run
+```
+
+Reprocessar falhas de uma data:
+
+```bash
+DATE=2026-08-26 bin/rails captures:retry_failed
+```
+
+Cada jornal pode configurar seletores e tempos específicos no campo JSON `capture_options`, incluindo `wait_for_selector`, `click_selectors`, `hide_selectors`, `extra_delay_ms` e timeouts.
+
+## Render
+
+O `render.yaml` cria:
+
+- serviço web Rails;
+- PostgreSQL;
+- Cron Job diário às 11:00 UTC (08:00 em São Paulo);
+- execução do Solid Queue dentro do Puma.
+
+Antes do primeiro deploy, preencha no Render as variáveis marcadas como `sync: false`, especialmente SMTP, administrador inicial e armazenamento S3 compatível. As imagens não devem ser salvas no filesystem efêmero do Render.
+
+## Fluxo Git
+
+A branch `main` é mantida estável e o desenvolvimento acontece em `develop` por meio do PR rascunho do MVP.

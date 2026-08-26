@@ -1,5 +1,5 @@
 class Admin::NewspapersController < Admin::BaseController
-  before_action :set_newspaper, only: %i[show edit update destroy]
+  before_action :set_newspaper, only: %i[show edit update destroy capture]
 
   def index
     @newspapers = Newspaper.alphabetical
@@ -41,6 +41,12 @@ class Admin::NewspapersController < Admin::BaseController
     else
       redirect_to admin_newspaper_path(@newspaper), alert: "O jornal possui capturas e não pode ser removido."
     end
+  end
+
+  def capture
+    CaptureRunJob.perform_later(Date.current, newspaper_id: @newspaper.id, force: true)
+    record_activity("newspaper.capture_requested", @newspaper)
+    redirect_to admin_newspaper_path(@newspaper), notice: "Captura manual adicionada à fila."
   end
 
   private

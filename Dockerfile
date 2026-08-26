@@ -14,9 +14,16 @@ FROM docker.io/library/ruby:$RUBY_VERSION-slim AS base
 # Rails app lives here
 WORKDIR /rails
 
+ENV PLAYWRIGHT_BROWSERS_PATH="/ms-playwright"
+
+COPY requirements.txt ./
+
 # Install base packages
 RUN apt-get update -qq && \
-    apt-get install --no-install-recommends -y curl libjemalloc2 libvips postgresql-client && \
+    apt-get install --no-install-recommends -y curl libjemalloc2 libvips postgresql-client python3 python3-pip fonts-dejavu-core && \
+    pip3 install --break-system-packages --no-cache-dir -r requirements.txt && \
+    python3 -m playwright install-deps chromium && \
+    python3 -m playwright install chromium && \
     ln -s /usr/lib/$(uname -m)-linux-gnu/libjemalloc.so.2 /usr/local/lib/libjemalloc.so && \
     rm -rf /var/lib/apt/lists /var/cache/apt/archives
 

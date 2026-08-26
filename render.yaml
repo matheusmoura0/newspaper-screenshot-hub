@@ -1,0 +1,61 @@
+services:
+  - type: web
+    name: newspaper-screenshot-hub
+    runtime: docker
+    plan: starter
+    healthCheckPath: /up
+    dockerCommand: ./bin/thrust ./bin/rails server
+    preDeployCommand: bundle exec rails db:prepare db:seed
+    envVars: &shared_env
+      - key: DATABASE_URL
+        fromDatabase:
+          name: newspaper-screenshot-hub-db
+          property: connectionString
+      - key: SECRET_KEY_BASE
+        generateValue: true
+      - key: SOLID_QUEUE_IN_PUMA
+        value: true
+      - key: APP_HOST
+        sync: false
+      - key: ADMIN_NAME
+        value: Administrador
+      - key: ADMIN_EMAIL
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: MAILER_FROM
+        sync: false
+      - key: SMTP_ADDRESS
+        sync: false
+      - key: SMTP_PORT
+        value: 587
+      - key: SMTP_USERNAME
+        sync: false
+      - key: SMTP_PASSWORD
+        sync: false
+      - key: S3_ACCESS_KEY_ID
+        sync: false
+      - key: S3_SECRET_ACCESS_KEY
+        sync: false
+      - key: S3_BUCKET
+        sync: false
+      - key: S3_ENDPOINT
+        sync: false
+      - key: S3_REGION
+        value: auto
+      - key: S3_FORCE_PATH_STYLE
+        value: true
+
+  - type: cron
+    name: newspaper-screenshot-hub-daily-capture
+    runtime: docker
+    plan: starter
+    schedule: "0 11 * * *"
+    dockerCommand: bundle exec rails captures:run
+    envVars: *shared_env
+
+databases:
+  - name: newspaper-screenshot-hub-db
+    plan: basic-256mb
+    databaseName: newspaper_screenshot_hub
+    user: newspaper_screenshot_hub
