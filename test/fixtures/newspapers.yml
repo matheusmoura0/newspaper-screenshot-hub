@@ -1,0 +1,27 @@
+# Read about fixtures at https://api.rubyonrails.org/classes/ActiveRecord/FixtureSet.html
+
+one:
+  name: MyString
+  slug: MyString
+  homepage_url: MyString
+  category: MyString
+  country: MyString
+  time_zone: MyString
+  capture_time: 2026-08-26 20:07:11
+  desktop_enabled: false
+  mobile_enabled: false
+  active: false
+  capture_options: 
+
+two:
+  name: MyString
+  slug: MyString
+  homepage_url: MyString
+  category: MyString
+  country: MyString
+  time_zone: MyString
+  capture_time: 2026-08-26 20:07:11
+  desktop_enabled: false
+  mobile_enabled: false
+  active: false
+  capture_options: 

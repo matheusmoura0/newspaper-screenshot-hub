@@ -1,0 +1,33 @@
+# Read about fixtures at https://api.rubyonrails.org/classes/ActiveRecord/FixtureSet.html
+
+one:
+  newspaper: one
+  capture_run: one
+  captured_on: 2026-08-26
+  captured_at: 2026-08-26 20:07:13
+  viewport: 1
+  status: 1
+  attempts: 1
+  duration_ms: 1
+  width: 1
+  height: 1
+  source_url: MyString
+  error_code: MyString
+  error_message: MyText
+  metadata: 
+
+two:
+  newspaper: two
+  capture_run: two
+  captured_on: 2026-08-26
+  captured_at: 2026-08-26 20:07:13
+  viewport: 1
+  status: 1
+  attempts: 1
+  duration_ms: 1
+  width: 1
+  height: 1
+  source_url: MyString
+  error_code: MyString
+  error_message: MyText
+  metadata: 

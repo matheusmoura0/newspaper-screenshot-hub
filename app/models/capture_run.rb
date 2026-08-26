@@ -1,0 +1,2 @@
+class CaptureRun < ApplicationRecord
+end
