@@ -688,6 +688,28 @@ index e5b5cb7..dd936a7 100644
 +    assert_response :success
 +  end
  end
+diff --git a/test/controllers/passwords_controller_test.rb b/test/controllers/passwords_controller_test.rb
+index e1a1b03..dc700c1 100644
+--- a/test/controllers/passwords_controller_test.rb
++++ b/test/controllers/passwords_controller_test.rb
+@@ -46,7 +46,7 @@ class PasswordsControllerTest < ActionDispatch::IntegrationTest
+     end
+ 
+     follow_redirect!
+-    assert_notice "Password has been reset"
++    assert_notice "Senha definida com sucesso"
+   end
+ 
+   test "update with non matching passwords" do
+@@ -57,7 +57,7 @@ class PasswordsControllerTest < ActionDispatch::IntegrationTest
+     end
+ 
+     follow_redirect!
+-    assert_notice "Passwords did not match"
++    assert_notice "As senhas não coincidem"
+   end
+ 
+   private
 diff --git a/test/fixtures/capture_runs.yml b/test/fixtures/capture_runs.yml
 index 9c87afa..748ddc2 100644
 --- a/test/fixtures/capture_runs.yml
