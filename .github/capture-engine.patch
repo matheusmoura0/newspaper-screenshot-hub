@@ -677,29 +677,31 @@ index 0000000..5249180
 +    main()
 diff --git a/test/jobs/capture_run_job_test.rb b/test/jobs/capture_run_job_test.rb
 new file mode 100644
-index 0000000..f155f9a
+index 0000000..e0a896f
 --- /dev/null
 +++ b/test/jobs/capture_run_job_test.rb
-@@ -0,0 +1,21 @@
+@@ -0,0 +1,23 @@
 +require "test_helper"
-+require "minitest/mock"
 +
 +class CaptureRunJobTest < ActiveJob::TestCase
 +  test "creates one screenshot per active viewport without duplicates" do
 +    date = Date.new(2026, 9, 1)
 +
-+    CaptureScreenshotJob.stub(:perform_now, true) do
-+      assert_difference -> { Screenshot.count }, 3 do
-+        CaptureRunJob.perform_now(date)
-+      end
++    original_perform_now = CaptureScreenshotJob.method(:perform_now)
++    CaptureScreenshotJob.define_singleton_method(:perform_now) { |_id| true }
 +
-+      assert_no_difference -> { Screenshot.count } do
-+        CaptureRunJob.perform_now(date)
-+      end
++    assert_difference -> { Screenshot.count }, 3 do
++      CaptureRunJob.perform_now(date)
++    end
++
++    assert_no_difference -> { Screenshot.count } do
++      CaptureRunJob.perform_now(date)
 +    end
 +
 +    run = CaptureRun.find_by!(scheduled_for: date)
 +    assert_equal 3, run.expected_count
++  ensure
++    CaptureScreenshotJob.define_singleton_method(:perform_now, original_perform_now) if original_perform_now
 +  end
 +end
 diff --git a/test/models/capture_run_test.rb b/test/models/capture_run_test.rb
