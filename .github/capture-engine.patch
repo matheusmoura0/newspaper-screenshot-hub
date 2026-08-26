@@ -677,11 +677,12 @@ index 0000000..5249180
 +    main()
 diff --git a/test/jobs/capture_run_job_test.rb b/test/jobs/capture_run_job_test.rb
 new file mode 100644
-index 0000000..7fed505
+index 0000000..f155f9a
 --- /dev/null
 +++ b/test/jobs/capture_run_job_test.rb
-@@ -0,0 +1,20 @@
+@@ -0,0 +1,21 @@
 +require "test_helper"
++require "minitest/mock"
 +
 +class CaptureRunJobTest < ActiveJob::TestCase
 +  test "creates one screenshot per active viewport without duplicates" do
