@@ -145,7 +145,7 @@ index b76566d..7dd3215 100644
        @newspaper = Newspaper.find(params[:id])
 diff --git a/app/jobs/capture_run_job.rb b/app/jobs/capture_run_job.rb
 new file mode 100644
-index 0000000..e565598
+index 0000000..d557166
 --- /dev/null
 +++ b/app/jobs/capture_run_job.rb
 @@ -0,0 +1,40 @@
@@ -159,7 +159,7 @@ index 0000000..e565598
 +
 +    newspapers = Newspaper.active.alphabetical
 +    newspapers = newspapers.where(id: newspaper_id) if newspaper_id.present?
-+    targets = newspapers.flat_map { |newspaper| viewports_for(newspaper).map { |viewport| [newspaper, viewport] } }
++    targets = newspapers.flat_map { |newspaper| viewports_for(newspaper).map { |viewport| [ newspaper, viewport ] } }
 +
 +    run.update!(status: :running, started_at: Time.current, finished_at: nil)
 +
@@ -191,7 +191,7 @@ index 0000000..e565598
 +end
 diff --git a/app/jobs/capture_screenshot_job.rb b/app/jobs/capture_screenshot_job.rb
 new file mode 100644
-index 0000000..1b8a19f
+index 0000000..a3c60d9
 --- /dev/null
 +++ b/app/jobs/capture_screenshot_job.rb
 @@ -0,0 +1,44 @@
@@ -207,7 +207,7 @@ index 0000000..1b8a19f
 +      screenshot.increment!(:attempts)
 +      screenshot.update!(status: :processing, error_code: nil, error_message: nil)
 +
-+      Tempfile.create(["newspaper-screenshot", ".png"]) do |file|
++      Tempfile.create([ "newspaper-screenshot", ".png" ]) do |file|
 +        started_at = Process.clock_gettime(Process::CLOCK_MONOTONIC)
 +        options = (screenshot.newspaper.capture_options || {}).merge("time_zone" => screenshot.newspaper.time_zone)
 +        metadata = CapturePage.call(url: screenshot.source_url, viewport: screenshot.viewport, output_path: file.path, options:)
@@ -264,7 +264,7 @@ index 37c0215..a429cb7 100644
  end
 diff --git a/app/services/capture_page.rb b/app/services/capture_page.rb
 new file mode 100644
-index 0000000..e71c925
+index 0000000..0c45795
 --- /dev/null
 +++ b/app/services/capture_page.rb
 @@ -0,0 +1,32 @@
@@ -293,7 +293,7 @@ index 0000000..e71c925
 +    ]
 +
 +    stdout, stderr, status = Open3.capture3(*command)
-+    raise Error, [stderr, stdout].reject(&:blank?).join("\n").truncate(2_000) unless status.success? && File.size?(output_path)
++    raise Error, [ stderr, stdout ].reject(&:blank?).join("\n").truncate(2_000) unless status.success? && File.size?(output_path)
 +
 +    JSON.parse(stdout.lines.last || "{}")
 +  rescue JSON::ParserError => error
