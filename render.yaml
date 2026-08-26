@@ -2,6 +2,7 @@ services:
   - type: web
     name: newspaper-screenshot-hub
     runtime: docker
+    branch: develop
     plan: starter
     healthCheckPath: /up
     dockerCommand: ./bin/thrust ./bin/rails server
@@ -18,7 +19,7 @@ services:
       - key: SECRET_KEY_BASE
         generateValue: true
       - key: SOLID_QUEUE_IN_PUMA
-        value: true
+        value: "true"
       - key: ADMIN_NAME
         value: Administrador
       - key: ADMIN_EMAIL
