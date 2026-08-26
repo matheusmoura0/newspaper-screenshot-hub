@@ -1,0 +1,718 @@
+diff --git a/.env.example b/.env.example
+new file mode 100644
+index 0000000..3097479
+--- /dev/null
++++ b/.env.example
+@@ -0,0 +1,17 @@
++DATABASE_URL=postgresql://postgres:postgres@localhost/newspaper_screenshot_hub_development
++APP_HOST=localhost:3000
++SECRET_KEY_BASE=
++ADMIN_NAME=Administrador
++ADMIN_EMAIL=admin@example.com
++ADMIN_PASSWORD=
++MAILER_FROM=noreply@example.com
++SMTP_ADDRESS=smtp.example.com
++SMTP_PORT=587
++SMTP_USERNAME=
++SMTP_PASSWORD=
++S3_ACCESS_KEY_ID=
++S3_SECRET_ACCESS_KEY=
++S3_BUCKET=
++S3_ENDPOINT=
++S3_REGION=auto
++S3_FORCE_PATH_STYLE=true
+diff --git a/.gitignore b/.gitignore
+index e2e796c..1e21052 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -9,6 +9,7 @@
+ 
+ # Ignore all environment files.
+ /.env*
++!/.env.example
+ 
+ # Ignore all logfiles and tempfiles.
+ /log/*
+diff --git a/Dockerfile b/Dockerfile
+index 065f940..02d3f07 100644
+--- a/Dockerfile
++++ b/Dockerfile
+@@ -14,9 +14,16 @@ FROM docker.io/library/ruby:$RUBY_VERSION-slim AS base
+ # Rails app lives here
+ WORKDIR /rails
+ 
++ENV PLAYWRIGHT_BROWSERS_PATH="/ms-playwright"
++
++COPY requirements.txt ./
++
+ # Install base packages
+ RUN apt-get update -qq && \
+-    apt-get install --no-install-recommends -y curl libjemalloc2 libvips postgresql-client && \
++    apt-get install --no-install-recommends -y curl libjemalloc2 libvips postgresql-client python3 python3-pip fonts-dejavu-core && \
++    pip3 install --break-system-packages --no-cache-dir -r requirements.txt && \
++    python3 -m playwright install-deps chromium && \
++    python3 -m playwright install chromium && \
+     ln -s /usr/lib/$(uname -m)-linux-gnu/libjemalloc.so.2 /usr/local/lib/libjemalloc.so && \
+     rm -rf /var/lib/apt/lists /var/cache/apt/archives
+ 
+diff --git a/Gemfile b/Gemfile
+index d1648b8..26c6d6a 100644
+--- a/Gemfile
++++ b/Gemfile
+@@ -39,6 +39,7 @@ gem "thruster", require: false
+ 
+ # Use Active Storage variants [https://guides.rubyonrails.org/active_storage_overview.html#transforming-images]
+ gem "image_processing", "~> 1.2"
++gem "aws-sdk-s3", require: false
+ 
+ group :development, :test do
+   # See https://guides.rubyonrails.org/debugging_rails_applications.html#debugging-with-the-debug-gem
+diff --git a/README.md b/README.md
+index 6add1e6..de5c711 100644
+--- a/README.md
++++ b/README.md
+@@ -21,4 +21,46 @@ Plataforma interna para capturar, organizar e consultar screenshots diários de
+ - Playwright/Chromium
+ - Render
+ 
+-O projeto está em desenvolvimento. A branch `main` será mantida estável e o trabalho será realizado pela branch `develop`.
++## Desenvolvimento local
++
++Pré-requisitos: Ruby 3.3, PostgreSQL, Python 3 e Chromium do Playwright.
++
++```bash
++cp .env.example .env
++bundle install
++pip3 install -r requirements.txt
++python3 -m playwright install chromium
++bin/rails db:prepare db:seed
++bin/dev
++```
++
++## Capturas
++
++Executar todos os jornais ativos:
++
++```bash
++bin/rails captures:run
++```
++
++Reprocessar falhas de uma data:
++
++```bash
++DATE=2026-08-26 bin/rails captures:retry_failed
++```
++
++Cada jornal pode configurar seletores e tempos específicos no campo JSON `capture_options`, incluindo `wait_for_selector`, `click_selectors`, `hide_selectors`, `extra_delay_ms` e timeouts.
++
++## Render
++
++O `render.yaml` cria:
++
++- serviço web Rails;
++- PostgreSQL;
++- Cron Job diário às 11:00 UTC (08:00 em São Paulo);
++- execução do Solid Queue dentro do Puma.
++
++Antes do primeiro deploy, preencha no Render as variáveis marcadas como `sync: false`, especialmente SMTP, administrador inicial e armazenamento S3 compatível. As imagens não devem ser salvas no filesystem efêmero do Render.
++
++## Fluxo Git
++
++A branch `main` é mantida estável e o desenvolvimento acontece em `develop` por meio do PR rascunho do MVP.
+diff --git a/app/controllers/admin/newspapers_controller.rb b/app/controllers/admin/newspapers_controller.rb
+index b76566d..7dd3215 100644
+--- a/app/controllers/admin/newspapers_controller.rb
++++ b/app/controllers/admin/newspapers_controller.rb
+@@ -1,5 +1,5 @@
+ class Admin::NewspapersController < Admin::BaseController
+-  before_action :set_newspaper, only: %i[show edit update destroy]
++  before_action :set_newspaper, only: %i[show edit update destroy capture]
+ 
+   def index
+     @newspapers = Newspaper.alphabetical
+@@ -43,6 +43,12 @@ class Admin::NewspapersController < Admin::BaseController
+     end
+   end
+ 
++  def capture
++    CaptureRunJob.perform_later(Date.current, newspaper_id: @newspaper.id, force: true)
++    record_activity("newspaper.capture_requested", @newspaper)
++    redirect_to admin_newspaper_path(@newspaper), notice: "Captura manual adicionada à fila."
++  end
++
+   private
+     def set_newspaper
+       @newspaper = Newspaper.find(params[:id])
+diff --git a/app/jobs/capture_run_job.rb b/app/jobs/capture_run_job.rb
+new file mode 100644
+index 0000000..e565598
+--- /dev/null
++++ b/app/jobs/capture_run_job.rb
+@@ -0,0 +1,40 @@
++class CaptureRunJob < ApplicationJob
++  queue_as :captures
++
++  def perform(date = Date.current, newspaper_id: nil, force: false)
++    date = Date.parse(date) if date.is_a?(String)
++    run = CaptureRun.find_or_create_by!(scheduled_for: date)
++    return run if run.completed? && !force && newspaper_id.nil?
++
++    newspapers = Newspaper.active.alphabetical
++    newspapers = newspapers.where(id: newspaper_id) if newspaper_id.present?
++    targets = newspapers.flat_map { |newspaper| viewports_for(newspaper).map { |viewport| [newspaper, viewport] } }
++
++    run.update!(status: :running, started_at: Time.current, finished_at: nil)
++
++    screenshots = targets.map do |newspaper, viewport|
++      screenshot = Screenshot.find_or_initialize_by(newspaper:, captured_on: date, viewport:)
++      screenshot.capture_run = run
++      screenshot.source_url = newspaper.homepage_url
++      screenshot.status = :pending if force && screenshot.failed?
++      screenshot.save!
++      screenshot
++    end
++
++    run.update!(expected_count: run.screenshots.count)
++    screenshots.each { |screenshot| CaptureScreenshotJob.perform_now(screenshot.id) unless screenshot.completed? }
++
++    run.reload
++  rescue StandardError => error
++    run&.update!(status: :failed, finished_at: Time.current, error_summary: error.message.to_s.truncate(2_000))
++    raise
++  end
++
++  private
++    def viewports_for(newspaper)
++      [].tap do |viewports|
++        viewports << :desktop if newspaper.desktop_enabled?
++        viewports << :mobile if newspaper.mobile_enabled?
++      end
++    end
++end
+diff --git a/app/jobs/capture_screenshot_job.rb b/app/jobs/capture_screenshot_job.rb
+new file mode 100644
+index 0000000..1b8a19f
+--- /dev/null
++++ b/app/jobs/capture_screenshot_job.rb
+@@ -0,0 +1,44 @@
++class CaptureScreenshotJob < ApplicationJob
++  queue_as :captures
++
++  def perform(screenshot_id)
++    screenshot = Screenshot.find(screenshot_id)
++    return if screenshot.completed?
++
++    last_error = nil
++    3.times do
++      screenshot.increment!(:attempts)
++      screenshot.update!(status: :processing, error_code: nil, error_message: nil)
++
++      Tempfile.create(["newspaper-screenshot", ".png"]) do |file|
++        started_at = Process.clock_gettime(Process::CLOCK_MONOTONIC)
++        options = (screenshot.newspaper.capture_options || {}).merge("time_zone" => screenshot.newspaper.time_zone)
++        metadata = CapturePage.call(url: screenshot.source_url, viewport: screenshot.viewport, output_path: file.path, options:)
++        duration_ms = ((Process.clock_gettime(Process::CLOCK_MONOTONIC) - started_at) * 1_000).round
++        file.rewind
++        screenshot.image.attach(io: file, filename: filename_for(screenshot), content_type: "image/png")
++        screenshot.update!(status: :completed, captured_at: Time.current, duration_ms:, width: metadata["width"], height: metadata["height"], metadata: metadata)
++        return
++      end
++    rescue StandardError => error
++      last_error = error
++    end
++
++    screenshot.mark_failed!(last_error)
++  ensure
++    refresh_run(screenshot.capture_run) if screenshot&.capture_run
++  end
++
++  private
++    def filename_for(screenshot)
++      "#{screenshot.captured_on}-#{screenshot.newspaper.slug}-#{screenshot.viewport}.png"
++    end
++
++    def refresh_run(run)
++      completed = run.screenshots.completed.count
++      failed = run.screenshots.failed.count
++      pending = run.screenshots.where(status: %i[pending processing]).exists?
++      status = if pending then :running elsif failed.positive? then :completed_with_errors else :completed end
++      run.update!(completed_count: completed, failed_count: failed, status:, finished_at: (Time.current unless pending))
++    end
++end
+diff --git a/app/mailers/application_mailer.rb b/app/mailers/application_mailer.rb
+index 3c34c81..0ee7a11 100644
+--- a/app/mailers/application_mailer.rb
++++ b/app/mailers/application_mailer.rb
+@@ -1,4 +1,4 @@
+ class ApplicationMailer < ActionMailer::Base
+-  default from: "from@example.com"
++  default from: ENV.fetch("MAILER_FROM", "noreply@example.com")
+   layout "mailer"
+ end
+diff --git a/app/models/screenshot.rb b/app/models/screenshot.rb
+index 37c0215..a429cb7 100644
+--- a/app/models/screenshot.rb
++++ b/app/models/screenshot.rb
+@@ -11,4 +11,8 @@ class Screenshot < ApplicationRecord
+   validates :viewport, uniqueness: { scope: %i[newspaper_id captured_on] }
+ 
+   scope :recent, -> { order(captured_on: :desc, captured_at: :desc) }
++
++  def mark_failed!(error)
++    update!(status: :failed, error_code: error.class.name, error_message: error.message.to_s.truncate(2_000))
++  end
+ end
+diff --git a/app/services/capture_page.rb b/app/services/capture_page.rb
+new file mode 100644
+index 0000000..e71c925
+--- /dev/null
++++ b/app/services/capture_page.rb
+@@ -0,0 +1,32 @@
++require "json"
++require "open3"
++
++class CapturePage
++  class Error < StandardError; end
++
++  SCRIPT_PATH = Rails.root.join("script/capture_page.py").freeze
++  VIEWPORTS = {
++    "desktop" => { width: 1440, height: 1200, scale: 1 },
++    "mobile" => { width: 430, height: 932, scale: 2 }
++  }.freeze
++
++  def self.call(url:, viewport:, output_path:, options: {})
++    settings = VIEWPORTS.fetch(viewport.to_s)
++    command = [
++      ENV.fetch("PYTHON_BIN", "python3"), SCRIPT_PATH.to_s,
++      "--url", url,
++      "--output", output_path.to_s,
++      "--width", settings[:width].to_s,
++      "--height", settings[:height].to_s,
++      "--scale", settings[:scale].to_s,
++      "--options", options.to_json
++    ]
++
++    stdout, stderr, status = Open3.capture3(*command)
++    raise Error, [stderr, stdout].reject(&:blank?).join("\n").truncate(2_000) unless status.success? && File.size?(output_path)
++
++    JSON.parse(stdout.lines.last || "{}")
++  rescue JSON::ParserError => error
++    raise Error, "A captura terminou sem metadados válidos: #{error.message}"
++  end
++end
+diff --git a/app/views/admin/newspapers/show.html.erb b/app/views/admin/newspapers/show.html.erb
+index 5a67c89..826c1bc 100644
+--- a/app/views/admin/newspapers/show.html.erb
++++ b/app/views/admin/newspapers/show.html.erb
+@@ -1,2 +1,2 @@
+-<div class="page-heading"><div><p class="eyebrow">JORNAL MONITORADO</p><h1><%= @newspaper.name %></h1><p class="muted"><%= @newspaper.homepage_url %></p></div><%= link_to "Editar", edit_admin_newspaper_path(@newspaper), class: "button primary" %></div>
++<div class="page-heading"><div><p class="eyebrow">JORNAL MONITORADO</p><h1><%= @newspaper.name %></h1><p class="muted"><%= @newspaper.homepage_url %></p></div><div class="button-group"><%= button_to "Capturar agora", capture_admin_newspaper_path(@newspaper), method: :post, class: "button secondary" %><%= link_to "Editar", edit_admin_newspaper_path(@newspaper), class: "button primary" %></div></div>
+ <div class="detail-grid panel"><div><span>Status</span><strong><%= @newspaper.active? ? "Ativo" : "Pausado" %></strong></div><div><span>Horário</span><strong><%= @newspaper.capture_time.strftime("%H:%M") %></strong></div><div><span>Fuso</span><strong><%= @newspaper.time_zone %></strong></div><div><span>Formatos</span><strong><%= [@newspaper.desktop_enabled? && "Desktop", @newspaper.mobile_enabled? && "Mobile"].compact.join(" + ") %></strong></div></div>
+diff --git a/config/database.yml b/config/database.yml
+index 554f65c..c0d6b2e 100644
+--- a/config/database.yml
++++ b/config/database.yml
+@@ -87,18 +87,13 @@ test:
+ production:
+   primary: &primary_production
+     <<: *default
+-    database: newspaper_screenshot_hub_production
+-    username: newspaper_screenshot_hub
+-    password: <%= ENV["NEWSPAPER_SCREENSHOT_HUB_DATABASE_PASSWORD"] %>
++    url: <%= ENV["DATABASE_URL"] %>
+   cache:
+     <<: *primary_production
+-    database: newspaper_screenshot_hub_production_cache
+     migrations_paths: db/cache_migrate
+   queue:
+     <<: *primary_production
+-    database: newspaper_screenshot_hub_production_queue
+     migrations_paths: db/queue_migrate
+   cable:
+     <<: *primary_production
+-    database: newspaper_screenshot_hub_production_cable
+     migrations_paths: db/cable_migrate
+diff --git a/config/environments/production.rb b/config/environments/production.rb
+index f5763e0..03208b3 100644
+--- a/config/environments/production.rb
++++ b/config/environments/production.rb
+@@ -22,7 +22,7 @@ Rails.application.configure do
+   # config.asset_host = "http://assets.example.com"
+ 
+   # Store uploaded files on the local file system (see config/storage.yml for options).
+-  config.active_storage.service = :local
++  config.active_storage.service = :s3
+ 
+   # Assume all access to the app is happening through a SSL-terminating reverse proxy.
+   # config.assume_ssl = true
+@@ -58,7 +58,16 @@ Rails.application.configure do
+   # config.action_mailer.raise_delivery_errors = false
+ 
+   # Set host to be used by links generated in mailer templates.
+-  config.action_mailer.default_url_options = { host: "example.com" }
++  config.action_mailer.default_url_options = { host: ENV.fetch("APP_HOST", "localhost"), protocol: "https" }
++  config.action_mailer.delivery_method = :smtp
++  config.action_mailer.smtp_settings = {
++    address: ENV.fetch("SMTP_ADDRESS", "localhost"),
++    port: ENV.fetch("SMTP_PORT", 587),
++    user_name: ENV["SMTP_USERNAME"],
++    password: ENV["SMTP_PASSWORD"],
++    authentication: :plain,
++    enable_starttls_auto: true
++  }
+ 
+   # Specify outgoing SMTP server. Remember to add smtp/* credentials via bin/rails credentials:edit.
+   # config.action_mailer.smtp_settings = {
+diff --git a/config/routes.rb b/config/routes.rb
+index c45e0c2..47d12a4 100644
+--- a/config/routes.rb
++++ b/config/routes.rb
+@@ -5,7 +5,9 @@ Rails.application.routes.draw do
+   resources :screenshots, only: %i[index show]
+ 
+   namespace :admin do
+-    resources :newspapers
++    resources :newspapers do
++      post :capture, on: :member
++    end
+     resources :users, only: %i[index new create update]
+   end
+   # Define your application routes per the DSL in https://guides.rubyonrails.org/routing.html
+diff --git a/config/storage.yml b/config/storage.yml
+index 927dc53..654d7c4 100644
+--- a/config/storage.yml
++++ b/config/storage.yml
+@@ -6,6 +6,15 @@ local:
+   service: Disk
+   root: <%= Rails.root.join("storage") %>
+ 
++s3:
++  service: S3
++  access_key_id: <%= ENV["S3_ACCESS_KEY_ID"] %>
++  secret_access_key: <%= ENV["S3_SECRET_ACCESS_KEY"] %>
++  region: <%= ENV.fetch("S3_REGION", "auto") %>
++  bucket: <%= ENV["S3_BUCKET"] %>
++  endpoint: <%= ENV["S3_ENDPOINT"] %>
++  force_path_style: <%= ENV.fetch("S3_FORCE_PATH_STYLE", "true") == "true" %>
++
+ # Use bin/rails credentials:edit to set the AWS secrets (as aws:access_key_id|secret_access_key)
+ # amazon:
+ #   service: S3
+diff --git a/lib/tasks/captures.rake b/lib/tasks/captures.rake
+new file mode 100644
+index 0000000..9113390
+--- /dev/null
++++ b/lib/tasks/captures.rake
+@@ -0,0 +1,12 @@
++namespace :captures do
++  desc "Captura todos os jornais ativos para a data atual"
++  task run: :environment do
++    CaptureRunJob.perform_now(Date.current)
++  end
++
++  desc "Reprocessa apenas capturas com falha na data informada (DATE=AAAA-MM-DD)"
++  task retry_failed: :environment do
++    date = Date.iso8601(ENV.fetch("DATE", Date.current.iso8601))
++    Screenshot.failed.where(captured_on: date).find_each { |screenshot| CaptureScreenshotJob.perform_now(screenshot.id) }
++  end
++end
+diff --git a/render.yaml b/render.yaml
+new file mode 100644
+index 0000000..b31edf9
+--- /dev/null
++++ b/render.yaml
+@@ -0,0 +1,61 @@
++services:
++  - type: web
++    name: newspaper-screenshot-hub
++    runtime: docker
++    plan: starter
++    healthCheckPath: /up
++    dockerCommand: ./bin/thrust ./bin/rails server
++    preDeployCommand: bundle exec rails db:prepare db:seed
++    envVars: &shared_env
++      - key: DATABASE_URL
++        fromDatabase:
++          name: newspaper-screenshot-hub-db
++          property: connectionString
++      - key: SECRET_KEY_BASE
++        generateValue: true
++      - key: SOLID_QUEUE_IN_PUMA
++        value: true
++      - key: APP_HOST
++        sync: false
++      - key: ADMIN_NAME
++        value: Administrador
++      - key: ADMIN_EMAIL
++        sync: false
++      - key: ADMIN_PASSWORD
++        sync: false
++      - key: MAILER_FROM
++        sync: false
++      - key: SMTP_ADDRESS
++        sync: false
++      - key: SMTP_PORT
++        value: 587
++      - key: SMTP_USERNAME
++        sync: false
++      - key: SMTP_PASSWORD
++        sync: false
++      - key: S3_ACCESS_KEY_ID
++        sync: false
++      - key: S3_SECRET_ACCESS_KEY
++        sync: false
++      - key: S3_BUCKET
++        sync: false
++      - key: S3_ENDPOINT
++        sync: false
++      - key: S3_REGION
++        value: auto
++      - key: S3_FORCE_PATH_STYLE
++        value: true
++
++  - type: cron
++    name: newspaper-screenshot-hub-daily-capture
++    runtime: docker
++    plan: starter
++    schedule: "0 11 * * *"
++    dockerCommand: bundle exec rails captures:run
++    envVars: *shared_env
++
++databases:
++  - name: newspaper-screenshot-hub-db
++    plan: basic-256mb
++    databaseName: newspaper_screenshot_hub
++    user: newspaper_screenshot_hub
+diff --git a/requirements.txt b/requirements.txt
+new file mode 100644
+index 0000000..e37d398
+--- /dev/null
++++ b/requirements.txt
+@@ -0,0 +1 @@
++playwright==1.55.0
+diff --git a/script/__pycache__/capture_page.cpython-312.pyc b/script/__pycache__/capture_page.cpython-312.pyc
+new file mode 100644
+index 0000000000000000000000000000000000000000..3a647c2f7e332161b356223e7cecd9a47836f504
+GIT binary patch
+literal 6297
+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
+
+literal 0
+HcmV?d00001
+
+diff --git a/script/capture_page.py b/script/capture_page.py
+new file mode 100644
+index 0000000..5249180
+--- /dev/null
++++ b/script/capture_page.py
+@@ -0,0 +1,103 @@
++import argparse
++import json
++import os
++import time
++
++from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
++from playwright.sync_api import sync_playwright
++
++
++CONSENT_SELECTORS = [
++    "button:has-text('Aceitar')",
++    "button:has-text('Aceito')",
++    "button:has-text('Concordo')",
++    "button:has-text('Accept')",
++    "#onetrust-accept-btn-handler",
++]
++
++
++def parse_args():
++    parser = argparse.ArgumentParser()
++    parser.add_argument("--url", required=True)
++    parser.add_argument("--output", required=True)
++    parser.add_argument("--width", type=int, required=True)
++    parser.add_argument("--height", type=int, required=True)
++    parser.add_argument("--scale", type=float, default=1)
++    parser.add_argument("--options", default="{}")
++    return parser.parse_args()
++
++
++def click_first_visible(page, selectors):
++    for selector in selectors:
++        try:
++            locator = page.locator(selector).first
++            if locator.is_visible(timeout=500):
++                locator.click(timeout=1500)
++                return selector
++        except Exception:
++            continue
++    return None
++
++
++def warm_lazy_content(page, height):
++    page.evaluate("window.scrollTo(0, 0)")
++    total_height = page.evaluate("document.documentElement.scrollHeight")
++    position = 0
++    while position < min(total_height, 30000):
++        position += height
++        page.evaluate("position => window.scrollTo(0, position)", position)
++        page.wait_for_timeout(180)
++    page.evaluate("window.scrollTo(0, 0)")
++    page.wait_for_timeout(500)
++
++
++def main():
++    args = parse_args()
++    options = json.loads(args.options)
++    started_at = time.monotonic()
++
++    with sync_playwright() as playwright:
++        browser = playwright.chromium.launch(
++            headless=True,
++            args=["--disable-dev-shm-usage", "--no-sandbox", "--disable-notifications"],
++        )
++        context = browser.new_context(
++            viewport={"width": args.width, "height": args.height},
++            device_scale_factor=args.scale,
++            locale="pt-BR",
++            timezone_id=options.get("time_zone", "America/Sao_Paulo"),
++            ignore_https_errors=True,
++            user_agent=options.get(
++                "user_agent",
++                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/139 Safari/537.36",
++            ),
++        )
++        page = context.new_page()
++        page.set_default_timeout(int(options.get("timeout_ms", 30000)))
++        page.goto(args.url, wait_until="domcontentloaded", timeout=int(options.get("navigation_timeout_ms", 60000)))
++
++        try:
++            page.wait_for_load_state("networkidle", timeout=int(options.get("network_idle_timeout_ms", 15000)))
++        except PlaywrightTimeoutError:
++            page.wait_for_timeout(2500)
++
++        clicked = click_first_visible(page, CONSENT_SELECTORS + options.get("click_selectors", []))
++        if options.get("wait_for_selector"):
++            page.locator(options["wait_for_selector"]).first.wait_for(state="visible")
++        for selector in options.get("hide_selectors", []):
++            page.locator(selector).evaluate_all("elements => elements.forEach(element => element.style.display = 'none')")
++
++        warm_lazy_content(page, args.height)
++        page.wait_for_timeout(int(options.get("extra_delay_ms", 1000)))
++        page.screenshot(path=args.output, full_page=True, animations="disabled")
++        dimensions = page.evaluate("({ width: document.documentElement.scrollWidth, height: document.documentElement.scrollHeight })")
++        browser.close()
++
++    if not os.path.exists(args.output) or os.path.getsize(args.output) == 0:
++        raise RuntimeError("O Playwright não gerou uma imagem válida")
++
++    print(json.dumps({**dimensions, "consent_clicked": clicked, "elapsed_ms": round((time.monotonic() - started_at) * 1000)}))
++
++
++if __name__ == "__main__":
++    main()
+diff --git a/test/jobs/capture_run_job_test.rb b/test/jobs/capture_run_job_test.rb
+new file mode 100644
+index 0000000..7fed505
+--- /dev/null
++++ b/test/jobs/capture_run_job_test.rb
+@@ -0,0 +1,20 @@
++require "test_helper"
++
++class CaptureRunJobTest < ActiveJob::TestCase
++  test "creates one screenshot per active viewport without duplicates" do
++    date = Date.new(2026, 9, 1)
++
++    CaptureScreenshotJob.stub(:perform_now, true) do
++      assert_difference -> { Screenshot.count }, 3 do
++        CaptureRunJob.perform_now(date)
++      end
++
++      assert_no_difference -> { Screenshot.count } do
++        CaptureRunJob.perform_now(date)
++      end
++    end
++
++    run = CaptureRun.find_by!(scheduled_for: date)
++    assert_equal 3, run.expected_count
++  end
++end
+diff --git a/test/models/capture_run_test.rb b/test/models/capture_run_test.rb
+index 8334f8e..3333364 100644
+--- a/test/models/capture_run_test.rb
++++ b/test/models/capture_run_test.rb
+@@ -1,7 +1,7 @@
+ require "test_helper"
+ 
+ class CaptureRunTest < ActiveSupport::TestCase
+-  # test "the truth" do
+-  #   assert true
+-  # end
++  test "defaults to pending" do
++    assert CaptureRun.new.pending?
++  end
+ end
