@@ -29,9 +29,14 @@ jobs:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/newspaper_screenshot_hub_production
       SECRET_KEY_BASE_DUMMY: "1"
       SOLID_QUEUE_IN_PUMA: "true"
+      ADMIN_NAME: Diagnostic Admin
+      ADMIN_EMAIL: diagnostic@example.com
+      ADMIN_PASSWORD: diagnostic-password
 
     steps:
       - uses: actions/checkout@v4
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y libvips
       - uses: ruby/setup-ruby@v1
         with:
           bundler-cache: true
