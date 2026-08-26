@@ -1,0 +1,41 @@
+name: Diagnose Solid Queue
+
+on:
+  push:
+    branches: [ diagnose-solid-queue ]
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      RAILS_ENV: production
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/newspaper_screenshot_hub_production
+      SECRET_KEY_BASE_DUMMY: "1"
+      SOLID_QUEUE_IN_PUMA: "true"
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ruby/setup-ruby@v1
+        with:
+          bundler-cache: true
+      - name: Prepare production database
+        run: bin/rails db:prepare
+      - name: Check Solid Queue configuration
+        run: bin/jobs check
