@@ -1,4 +1,4 @@
-name: Apply and validate MVP interface
+name: Apply and validate MVP interface v2
 
 on:
   push:
