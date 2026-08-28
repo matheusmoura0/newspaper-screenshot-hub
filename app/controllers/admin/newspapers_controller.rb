@@ -64,7 +64,8 @@ class Admin::NewspapersController < Admin::BaseController
       { newspaper_ids: newspapers.ids, newspaper_names: newspapers.pluck(:name), count: newspapers.size }
     )
 
-    redirect_to admin_newspapers_path, notice: "#{newspapers.size} #{'jornal'.pluralize(newspapers.size)} adicionado(s) à fila de captura."
+    label = newspapers.one? ? "jornal adicionado" : "jornais adicionados"
+    redirect_to admin_newspapers_path, notice: "#{newspapers.size} #{label} à fila de captura."
   end
 
   private
