@@ -1,0 +1,27 @@
+# Read about fixtures at https://api.rubyonrails.org/classes/ActiveRecord/FixtureSet.html
+
+one:
+  name: Jornal Um
+  slug: jornal-um
+  homepage_url: https://example.com/jornal-um
+  category: Nacional
+  country: Brasil
+  time_zone: America/Sao_Paulo
+  capture_time: 2026-08-26 20:07:11
+  desktop_enabled: true
+  mobile_enabled: true
+  active: true
+  capture_options: {}
+
+two:
+  name: Jornal Dois
+  slug: jornal-dois
+  homepage_url: https://example.com/jornal-dois
+  category: Regional
+  country: Brasil
+  time_zone: America/Sao_Paulo
+  capture_time: 2026-08-26 20:07:11
+  desktop_enabled: true
+  mobile_enabled: false
+  active: true
+  capture_options: {}

@@ -1,0 +1,34 @@
+services:
+  - type: web
+    name: newspaper-screenshot-hub
+    runtime: docker
+    branch: develop
+    plan: starter
+    healthCheckPath: /up
+    dockerCommand: ./bin/thrust ./bin/rails server
+    preDeployCommand: bundle exec rails db:prepare db:seed
+    disk:
+      name: newspaper-screenshots
+      mountPath: /rails/storage
+      sizeGB: 10
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: newspaper-screenshot-hub-db
+          property: connectionString
+      - key: SECRET_KEY_BASE
+        generateValue: true
+      - key: SOLID_QUEUE_IN_PUMA
+        value: "true"
+      - key: ADMIN_NAME
+        value: Administrador
+      - key: ADMIN_EMAIL
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
+
+databases:
+  - name: newspaper-screenshot-hub-db
+    plan: basic-256mb
+    databaseName: newspaper_screenshot_hub
+    user: newspaper_screenshot_hub
