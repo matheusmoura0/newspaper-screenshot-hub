@@ -1,0 +1,52 @@
+name: Validate manual captures
+
+on:
+  push:
+    branches:
+      - develop
+      - feature/manual-batch-capture
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      RAILS_ENV: test
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/newspaper_screenshot_hub_test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y libvips
+
+      - uses: ruby/setup-ruby@v1
+        with:
+          bundler-cache: true
+
+      - name: Prepare test database
+        run: bin/rails db:prepare
+
+      - name: Run capture tests
+        run: bin/rails test test/controllers/admin/newspapers_controller_test.rb test/jobs/capture_run_job_test.rb
+
+      - name: Check Ruby style
+        run: bin/rubocop app/controllers/admin/newspapers_controller.rb app/jobs/capture_run_job.rb test/controllers/admin/newspapers_controller_test.rb test/jobs/capture_run_job_test.rb
