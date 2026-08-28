@@ -1,4 +1,92 @@
-<div class="page-heading"><div><p class="eyebrow">ADMINISTRAÇÃO</p><h1>Jornais</h1><p class="muted">Gerencie as páginas monitoradas e seus formatos de captura.</p></div><%= link_to "Adicionar jornal", new_admin_newspaper_path, class: "button primary" %></div>
-<div class="table-card"><table><thead><tr><th>Jornal</th><th>Horário</th><th>Formatos</th><th>Status</th><th></th></tr></thead><tbody>
-<% @newspapers.each do |newspaper| %><tr><td><strong><%= newspaper.name %></strong><small><%= newspaper.homepage_url %></small></td><td><%= newspaper.capture_time.strftime("%H:%M") %></td><td><%= [newspaper.desktop_enabled? && "Desktop", newspaper.mobile_enabled? && "Mobile"].compact.join(" + ") %></td><td><span class="status <%= newspaper.active? ? "ok" : "off" %>"><%= newspaper.active? ? "Ativo" : "Pausado" %></span></td><td><%= link_to "Gerenciar", admin_newspaper_path(newspaper) %></td></tr><% end %>
-</tbody></table></div>
+<div class="page-heading">
+  <div>
+    <p class="eyebrow">ADMINISTRAÇÃO</p>
+    <h1>Jornais</h1>
+    <p class="muted">Gerencie as páginas monitoradas e dispare capturas individuais ou em lote.</p>
+  </div>
+  <%= link_to "Adicionar jornal", new_admin_newspaper_path, class: "button primary" %>
+</div>
+
+<div data-controller="batch-capture">
+  <%= form_with url: capture_selected_admin_newspapers_path, method: :post, class: "batch-capture-form" do |form| %>
+    <div class="batch-toolbar">
+      <div>
+        <strong>Captura manual</strong>
+        <span data-batch-capture-target="count">Nenhum jornal selecionado</span>
+      </div>
+      <%= form.submit "Capturar selecionados",
+            class: "button primary",
+            data: { batch_capture_target: "submit" } %>
+    </div>
+
+    <div class="table-card">
+      <table>
+        <thead>
+          <tr>
+            <th class="selection-cell">
+              <input
+                type="checkbox"
+                aria-label="Selecionar todos os jornais"
+                data-batch-capture-target="all"
+                data-action="batch-capture#toggleAll">
+            </th>
+            <th>Jornal</th>
+            <th>Horário</th>
+            <th>Formatos</th>
+            <th>Status</th>
+            <th>Ações</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% @newspapers.each do |newspaper| %>
+            <tr>
+              <td class="selection-cell">
+                <%= check_box_tag "newspaper_ids[]",
+                      newspaper.id,
+                      false,
+                      aria: { label: "Selecionar #{newspaper.name}" },
+                      data: {
+                        batch_capture_target: "item",
+                        action: "batch-capture#refresh"
+                      } %>
+              </td>
+              <td>
+                <strong><%= newspaper.name %></strong>
+                <small><%= newspaper.homepage_url %></small>
+              </td>
+              <td><%= newspaper.capture_time.strftime("%H:%M") %></td>
+              <td><%= [newspaper.desktop_enabled? && "Desktop", newspaper.mobile_enabled? && "Mobile"].compact.join(" + ") %></td>
+              <td>
+                <span class="status <%= newspaper.active? ? "ok" : "off" %>">
+                  <%= newspaper.active? ? "Ativo" : "Pausado" %>
+                </span>
+              </td>
+              <td>
+                <div class="row-actions">
+                  <%= link_to "Capturar agora",
+                        capture_admin_newspaper_path(newspaper),
+                        class: "text-action",
+                        data: { turbo_method: :post } %>
+                  <%= link_to "Gerenciar", admin_newspaper_path(newspaper) %>
+                </div>
+              </td>
+            </tr>
+          <% end %>
+
+          <% if @newspapers.empty? %>
+            <tr>
+              <td colspan="6" class="empty-state">
+                <strong>Nenhum jornal cadastrado.</strong>
+                Adicione o primeiro jornal para começar as capturas.
+              </td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+    </div>
+  <% end %>
+
+  <p class="batch-help">
+    A captura manual também funciona para jornais pausados. O agendamento diário continua processando apenas os jornais ativos.
+  </p>
+</div>
